@@ -14,9 +14,12 @@ namespace KghmProject_DavideQuartucci.IO
         private readonly CsvColumnMapping _columnMapping;
 
         /// <summary>
-        /// Constructor accepting the file path and the column mapping.
-        /// Avoids hardcoded strings and indices inside the methods.
+        /// Creates a reader for the given file using the given column mapping.
         /// </summary>
+        /// <param name="filePath">Path of the CSV file to read. </param>
+        /// <param name="columnMapping">Mapping describing which column holds each required field.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="filePath"/> is null, empty or whitespace.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="columnMapping"/> is null.</exception>
         public CsvReader(string filePath, CsvColumnMapping columnMapping)
         {
             if (string.IsNullOrWhiteSpace(filePath))
@@ -28,11 +31,14 @@ namespace KghmProject_DavideQuartucci.IO
         }
 
         /// <summary>
-        /// Reads the file sequentially and parses each line.
+        /// Reads the file sequentially, parsing each line into a KghmRecord. Rows that are blank,
+        /// malformed or contain missing data are skipped instead of stopping the read.
         /// </summary>
+        /// <returns>The list of successfully parsed records, in file order.</returns>
+        /// <exception cref="FileNotFoundException">Thrown when no file exists at the configured path.</exception>
         public List<KghmRecord> ReadData()
         {
-            var records = new List<KghmRecord>();
+            List<KghmRecord> records = new List<KghmRecord>();
 
             if (!File.Exists(_filePath))
             {
@@ -40,10 +46,10 @@ namespace KghmProject_DavideQuartucci.IO
             }
 
             // 'using' guarantees the file handle is closed and released.
-            using (var reader = new StreamReader(_filePath))
+            using (StreamReader reader = new StreamReader(_filePath))
             {
-                // Skip the header row before parsing numeric data.
-                string? headerLine = reader.ReadLine();
+                // Skip the header row before parsing numeric data; its content is not needed.
+                reader.ReadLine();
 
                 while (!reader.EndOfStream)
                 {

@@ -13,6 +13,7 @@ namespace KghmProject_DavideQuartucci.Processing
         /// <summary>
         /// Computes and assigns the TargetClass to each record in the list.
         /// </summary>
+        /// <param name="records">Chronologically ordered records to label.</param>
         void AssignLabels(List<KghmRecord> records);
     }
 }

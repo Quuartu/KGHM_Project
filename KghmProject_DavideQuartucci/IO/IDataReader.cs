@@ -11,6 +11,7 @@ namespace KghmProject_DavideQuartucci.IO
         /// <summary>
         /// Reads data from the source and returns a list of objects of type T.
         /// </summary>
+        /// <returns>The list of records read from the source, in source order.</returns>
         List<T> ReadData();
     }
 }

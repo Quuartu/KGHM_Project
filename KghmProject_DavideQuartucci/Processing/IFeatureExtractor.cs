@@ -11,6 +11,7 @@ namespace KghmProject_DavideQuartucci.Processing
         /// <summary>
         /// Processes the list of historical records to compute and inject derived features.
         /// </summary>
+        /// <param name="records">Chronologically ordered records to enrich with derived features.</param>
         void Extract(List<KghmRecord> records);
     }
 }

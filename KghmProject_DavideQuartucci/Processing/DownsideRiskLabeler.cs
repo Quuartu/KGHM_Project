@@ -17,6 +17,8 @@ namespace KghmProject_DavideQuartucci.Processing
         private readonly double _downsideThreshold;
 
         /// <summary>
+        /// Creates a labeler that flags the following day as downside risk when its
+        /// log-return falls at or below the given threshold.
         /// </summary>
         /// <param name="downsideThreshold">Log-return threshold (e.g. -0.015 for -1.5%) below which
         /// the following day is considered "downside risk". No default value: the threshold must
@@ -26,6 +28,11 @@ namespace KghmProject_DavideQuartucci.Processing
             _downsideThreshold = downsideThreshold;
         }
 
+        /// <summary>
+        /// Assigns the target class to every record based on the log-return realized on the
+        /// following day, and marks records with no observable following day as invalid.
+        /// </summary>
+        /// <param name="records">Chronologically ordered records to label.</param>
         public void AssignLabels(List<KghmRecord> records)
         {
             if (records == null || records.Count == 0) return;
@@ -37,16 +44,17 @@ namespace KghmProject_DavideQuartucci.Processing
 
                 if (current.AdjClose <= 0)
                 {
-                    current.IsValidForTraining = false;
+                    current.MarkInvalidForTraining();
                     continue;
                 }
 
                 double nextDayLogReturn = Math.Log(next.AdjClose / current.AdjClose);
-                current.TargetClass = nextDayLogReturn <= _downsideThreshold ? 1 : 0;
+                int targetClass = nextDayLogReturn <= _downsideThreshold ? 1 : 0;
+                current.SetTargetClass(targetClass);
             }
 
             // The last record has no following day on which to compute the label.
-            records[records.Count - 1].IsValidForTraining = false;
+            records[records.Count - 1].MarkInvalidForTraining();
         }
     }
 }

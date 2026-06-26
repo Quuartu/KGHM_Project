@@ -2,8 +2,7 @@ namespace KghmProject_DavideQuartucci.IO
 {
     /// <summary>
     /// Describes which column of the raw CSV holds each field required by KghmRecord.
-    /// Centralizes all column indices in a single configuration object, avoiding
-    /// magic numbers inside the parsing logic.
+    /// Using a single configuration object, avoiding numbers inside the parsing logic.
     /// </summary>
     public class CsvColumnMapping
     {
@@ -17,6 +16,19 @@ namespace KghmProject_DavideQuartucci.IO
         public int Wig20Index { get; }
         public int DateIndex { get; }
 
+        /// <summary>
+        /// Creates a column mapping from explicit indices. None of the indices has a default
+        /// value: every position must be supplied by the caller.
+        /// </summary>
+        /// <param name="adjCloseIndex">Zero-based index of the adjusted closing price column.</param>
+        /// <param name="volumeIndex">Zero-based index of the traded volume column.</param>
+        /// <param name="copperPriceIndex">Zero-based index of the copper price column.</param>
+        /// <param name="silverPriceIndex">Zero-based index of the silver price column.</param>
+        /// <param name="goldPriceIndex">Zero-based index of the gold price column.</param>
+        /// <param name="eurUsdIndex">Zero-based index of the EUR/USD exchange rate column.</param>
+        /// <param name="plnUsdIndex">Zero-based index of the PLN/USD exchange rate column.</param>
+        /// <param name="wig20Index">Zero-based index of the WIG20 index column.</param>
+        /// <param name="dateIndex">Zero-based index of the trading date column.</param>
         public CsvColumnMapping(
             int adjCloseIndex,
             int volumeIndex,
@@ -41,8 +53,9 @@ namespace KghmProject_DavideQuartucci.IO
 
         /// <summary>
         /// Minimum number of columns a CSV row must have to be interpreted with this mapping.
-        /// Computed dynamically from the configured indices, not hardcoded.
+        /// Computed dynamically from the configured indices.
         /// </summary>
+        /// <returns>The highest configured column index, plus one.</returns>
         public int MinimumColumnCount()
         {
             int maxIndex = AdjCloseIndex;

@@ -6,8 +6,17 @@ using KghmProject_DavideQuartucci.Processing;
 
 namespace KghmProject_DavideQuartucci
 {
+    /// <summary>
+    /// Composition root and entry point: wires together the IO, Models and Processing
+    /// classes with explicit configuration values, and runs the full preprocessing pipeline.
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// Application entry point. Reads the dataset, runs feature engineering and target
+        /// labeling, builds the standardized dataset for Accord.NET, and prints a summary.
+        /// </summary>
+        /// <param name="args">Command-line arguments (not used).</param>
         static void Main(string[] args)
         {
             // =================================================================================
@@ -43,7 +52,7 @@ namespace KghmProject_DavideQuartucci
                 List<KghmRecord> records = reader.ReadData();
                 Console.WriteLine($"[OK] Read complete. Records imported: {records.Count}");
 
-                // --- 2. Feature Extraction, temporal consistency and Target Labeling -------------
+                // --- 2. Feature Extraction, temporal consistency, Target Labeling and feature selection ---
                 List<IFeatureExtractor> extractors = new List<IFeatureExtractor>
                 {
                     new LogReturnExtractor(),
@@ -51,13 +60,6 @@ namespace KghmProject_DavideQuartucci
                 };
                 ITargetLabeler targetLabeler = new DownsideRiskLabeler(downsideThreshold);
 
-                DataPreprocessor preprocessor = new DataPreprocessor(extractors, targetLabeler);
-
-                Console.WriteLine("[INFO] Computing features (Log-Returns, MA50, Target Class)...");
-                preprocessor.Process(records);
-                Console.WriteLine("[OK] Data processing complete.");
-
-                // --- 3. Standardization and final formatting for Accord.NET ----------------------
                 // The features included in X are decided here, not inside DataPreprocessor:
                 // the class stays generic and reusable with any subset of features.
                 List<Func<KghmRecord, double>> featureSelectors = new List<Func<KghmRecord, double>>
@@ -78,9 +80,16 @@ namespace KghmProject_DavideQuartucci
                     "Volume", "EUR/USD", "PLN/USD", "WIG20", "Gold"
                 };
 
+                DataPreprocessor preprocessor = new DataPreprocessor(extractors, targetLabeler, featureSelectors);
+
+                Console.WriteLine("[INFO] Computing features (Log-Returns, MA50, Target Class)...");
+                preprocessor.Process(records);
+                Console.WriteLine("[OK] Data processing complete.");
+
+                // --- 3. Standardization and final formatting for Accord.NET ----------------------
                 double[][] features;
                 int[] targets;
-                preprocessor.BuildDataset(records, featureSelectors, out features, out targets);
+                preprocessor.BuildDataset(records, out features, out targets);
                 Console.WriteLine($"[OK] Dataset ready for Accord.NET: X = [{features.Length} x {featureSelectors.Count}], y = [{targets.Length}]");
 
                 // Print diagnostic summary report
