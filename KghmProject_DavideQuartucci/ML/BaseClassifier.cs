@@ -84,7 +84,7 @@ namespace KghmProject_DavideQuartucci.ML
         /// <summary>Predicts the class label for a single observation.</summary>
         public int Predict(double[] features) => Predict(new[] { features })[0];
 
-        /// <summary>Evaluates the trained model on the test set and prints accuracy, precision, recall and the confusion matrix.</summary>
+        /// <summary>Evaluates the trained model on the test set and prints accuracy, precision, recall, F1-score and the confusion matrix.</summary>
         /// <exception cref="InvalidOperationException">Thrown when called before <see cref="TrainFinalModel"/>.</exception>
         public virtual void Evaluate()
         {
@@ -95,6 +95,7 @@ namespace KghmProject_DavideQuartucci.ML
             Console.WriteLine($"Accuracy : {confusionMatrix.Accuracy:P2}");
             Console.WriteLine($"Precision: {confusionMatrix.Precision:P2}");
             Console.WriteLine($"Recall   : {confusionMatrix.Recall:P2}");
+            Console.WriteLine($"F1-Score : {confusionMatrix.FScore:F4}");
 
             Console.WriteLine("\nConfusion matrix:");
             Console.WriteLine($"{"",14} | {"Predicted 0",12} | {"Predicted 1",12}");
