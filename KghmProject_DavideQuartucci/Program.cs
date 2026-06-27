@@ -1,30 +1,22 @@
 using System;
 using System.Collections.Generic;
 using KghmProject_DavideQuartucci.IO;
+using KghmProject_DavideQuartucci.ML;
 using KghmProject_DavideQuartucci.Models;
 using KghmProject_DavideQuartucci.Processing;
 
 namespace KghmProject_DavideQuartucci
 {
     /// <summary>
-    /// Composition root and entry point: wires together the IO, Models and Processing
-    /// classes with explicit configuration values, and runs the full preprocessing pipeline.
+    /// Entry point: wires the IO, Models and Processing components together and runs the
+    /// preprocessing and classification pipeline on the KGHM dataset.
     /// </summary>
     class Program
     {
-        /// <summary>
-        /// Application entry point. Reads the dataset, runs feature engineering and target
-        /// labeling, builds the standardized dataset for Accord.NET, and prints a summary.
-        /// </summary>
-        /// <param name="args">Command-line arguments (not used).</param>
         static void Main(string[] args)
         {
-            // =================================================================================
-            // SINGLE CONFIGURATION POINT OF THE APPLICATION (composition root).
-            // File path, column indices, MA period and risk threshold are never written inside
-            // the business logic classes: they are defined here and passed to the constructors,
-            // so the IO/Models/Processing classes remain reusable and testable.
-            // =================================================================================
+            // Configuration is centralized here so the IO/Models/Processing classes stay
+            // generic and reusable with different inputs.
             string csvFilePath = @"../archive/kghm.csv";
 
             CsvColumnMapping columnMapping = new CsvColumnMapping(
@@ -39,20 +31,15 @@ namespace KghmProject_DavideQuartucci
                 dateIndex: 33);
 
             int movingAveragePeriod = 50;
-            double downsideThreshold = -0.015; // Log-return threshold for next-day downside risk (-1.5%)
-
-            Console.WriteLine("=== STARTING KGHM DATA PROCESSING PIPELINE ===");
+            double downsideThreshold = -0.015; // next-day log-return threshold for downside risk
 
             try
             {
-                // --- 1. Reading and Cleaning -----------------------------------------------------
+                Console.WriteLine("Phase 1: Data Loading & Preprocessing");
+
                 IDataReader<KghmRecord> reader = new CsvReader(csvFilePath, columnMapping);
-
-                Console.WriteLine("[INFO] Reading CSV file...");
                 List<KghmRecord> records = reader.ReadData();
-                Console.WriteLine($"[OK] Read complete. Records imported: {records.Count}");
 
-                // --- 2. Feature Extraction, temporal consistency, Target Labeling and feature selection ---
                 List<IFeatureExtractor> extractors = new List<IFeatureExtractor>
                 {
                     new LogReturnExtractor(),
@@ -60,8 +47,8 @@ namespace KghmProject_DavideQuartucci
                 };
                 ITargetLabeler targetLabeler = new DownsideRiskLabeler(downsideThreshold);
 
-                // The features included in X are decided here, not inside DataPreprocessor:
-                // the class stays generic and reusable with any subset of features.
+                // The features included in X are decided here, not inside DataPreprocessor,
+                // which stays generic and reusable with any subset of features.
                 List<Func<KghmRecord, double>> featureSelectors = new List<Func<KghmRecord, double>>
                 {
                     record => record.LogReturnAdjClose,
@@ -81,55 +68,51 @@ namespace KghmProject_DavideQuartucci
                 };
 
                 DataPreprocessor preprocessor = new DataPreprocessor(extractors, targetLabeler, featureSelectors);
-
-                Console.WriteLine("[INFO] Computing features (Log-Returns, MA50, Target Class)...");
                 preprocessor.Process(records);
-                Console.WriteLine("[OK] Data processing complete.");
 
-                // --- 3. Standardization and final formatting for Accord.NET ----------------------
                 double[][] features;
                 int[] targets;
                 preprocessor.BuildDataset(records, out features, out targets);
-                Console.WriteLine($"[OK] Dataset ready for Accord.NET: X = [{features.Length} x {featureSelectors.Count}], y = [{targets.Length}]");
 
-                // Print diagnostic summary report
-                PrintExecutionSummary(records, features, targets, featureNames);
+                Console.WriteLine($"Loaded {records.Count} records, {targets.Length} valid after feature extraction.");
+                Console.WriteLine($"Feature matrix shape: {features.Length}x{featureSelectors.Count}.");
+
+                PrintDatasetSummary(targets, features, featureNames);
+
+                RiskClassifier classifier = new RiskClassifier(features, targets);
+                classifier.SplitDataset();
+                classifier.TuneRegularization();
+                classifier.TrainFinalModel();
+                classifier.Evaluate();
             }
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[CRITICAL ERROR] An error occurred during execution: {ex.Message}");
+                Console.WriteLine($"Execution failed: {ex.Message}");
                 Console.ResetColor();
             }
-
-            Console.WriteLine("=============================================");
         }
 
-        /// <summary>
-        /// Analyzes the processed dataset and prints a control summary report.
-        /// </summary>
-        private static void PrintExecutionSummary(List<KghmRecord> records, double[][] features, int[] targets, string[] featureNames)
+        /// <summary>Prints the class distribution and the last few standardized rows of the dataset.</summary>
+        private static void PrintDatasetSummary(int[] targets, double[][] features, string[] featureNames)
         {
-            int validCount = targets.Length;
-            if (validCount == 0)
+            int total = targets.Length;
+            if (total == 0)
             {
-                Console.WriteLine("\n[WARNING] No valid records available for training.");
+                Console.WriteLine("No valid records available for training.");
                 return;
             }
 
-            int riskDays = 0;
-            foreach (int targetValue in targets)
+            int numPositives = 0;
+            foreach (int target in targets)
             {
-                if (targetValue == 1) riskDays++;
+                if (target == 1) numPositives++;
             }
 
-            Console.WriteLine("\n--- DATASET METRICS SUMMARY ---");
-            Console.WriteLine($"Total historical observations read: {records.Count}");
-            Console.WriteLine($"Observations valid for training (excluding MA50 warm-up and last day): {validCount}");
-            Console.WriteLine($"Days with downside risk on the following day (Target = 1): {riskDays} ({(double)riskDays / validCount * 100:F2}%)");
-            Console.WriteLine($"Stable/bullish days (Target = 0): {validCount - riskDays} ({(double)(validCount - riskDays) / validCount * 100:F2}%)");
+            Console.WriteLine($"Class 1 (downside risk): {numPositives} ({(double)numPositives / total * 100:F2}%)");
+            Console.WriteLine($"Class 0 (stable)       : {total - numPositives} ({(double)(total - numPositives) / total * 100:F2}%)");
 
-            Console.WriteLine("\n--- SAMPLE CHECK (LAST 5 ROWS OF STANDARDIZED X, y) ---");
+            Console.WriteLine("\nLast 5 rows of the standardized dataset:");
             Console.Write("Idx  | Target |");
             foreach (string name in featureNames)
             {
@@ -137,8 +120,8 @@ namespace KghmProject_DavideQuartucci
             }
             Console.WriteLine();
 
-            int startIndex = Math.Max(0, validCount - 5);
-            for (int i = startIndex; i < validCount; i++)
+            int startIndex = Math.Max(0, total - 5);
+            for (int i = startIndex; i < total; i++)
             {
                 Console.Write($"{i:D4} | {targets[i],6} |");
                 foreach (double value in features[i])
@@ -147,7 +130,6 @@ namespace KghmProject_DavideQuartucci
                 }
                 Console.WriteLine();
             }
-            Console.WriteLine();
         }
     }
 }
