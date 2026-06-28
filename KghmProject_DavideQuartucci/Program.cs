@@ -40,6 +40,8 @@ namespace KghmProject_DavideQuartucci
                 IDataReader<KghmRecord> reader = new CsvReader(csvFilePath, columnMapping);
                 List<KghmRecord> records = reader.ReadData();
 
+                DatasetAnalyzer.PrintRawStatistics(records);
+
                 List<IFeatureExtractor> extractors = new List<IFeatureExtractor>
                 {
                     new LogReturnExtractor(),
