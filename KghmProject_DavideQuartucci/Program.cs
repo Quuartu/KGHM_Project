@@ -35,7 +35,7 @@ namespace KghmProject_DavideQuartucci
 
             try
             {
-                Console.WriteLine("Phase 1: Data Loading & Preprocessing");
+                Console.WriteLine("\n=== Data Loading & Preprocessing (4) ===");
 
                 IDataReader<KghmRecord> reader = new CsvReader(csvFilePath, columnMapping);
                 List<KghmRecord> records = reader.ReadData();

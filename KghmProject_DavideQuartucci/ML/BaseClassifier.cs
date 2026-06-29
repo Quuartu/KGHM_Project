@@ -66,11 +66,11 @@ namespace KghmProject_DavideQuartucci.ML
             double trainPositiveRate = (double)numPositives / _trainTargets.Length;
             double testPositiveRate = (double)_testTargets.Count(t => t == 1) / _testTargets.Length;
 
-            Console.WriteLine("\nPhase 2: Train/Test Split & Class Balance");
+            Console.WriteLine("\n\n=== Train/Test Split & Class Balance (5.1) ===\n");
             Console.WriteLine($"Chronological split applied ({(1 - _testFraction) * 100:F0}% train, {_testFraction * 100:F0}% test).");
             Console.WriteLine($"Train set class 1 frequency: {trainPositiveRate:P2}");
             Console.WriteLine($"Test set class 1 frequency: {testPositiveRate:P2}");
-            Console.WriteLine($"Class weights -> stable: {weightNegative:F3}, risk: {weightPositive:F3}");
+            Console.WriteLine($"Class weights (computed from train set) -> stable: {weightNegative:F3}, risk: {weightPositive:F3}");
         }
 
         /// <summary>Trains the final model on the entire training set.</summary>
@@ -91,7 +91,7 @@ namespace KghmProject_DavideQuartucci.ML
             int[] predicted = Predict(_testFeatures);
             ConfusionMatrix confusionMatrix = new ConfusionMatrix(predicted, _testTargets);
 
-            Console.WriteLine("\nPhase 4: Evaluation on Test Set");
+            Console.WriteLine("\n\n=== Evaluation on Test Set (6) ===\n");
             Console.WriteLine($"Accuracy : {confusionMatrix.Accuracy:P2}");
             Console.WriteLine($"Precision: {confusionMatrix.Precision:P2}");
             Console.WriteLine($"Recall   : {confusionMatrix.Recall:P2}");

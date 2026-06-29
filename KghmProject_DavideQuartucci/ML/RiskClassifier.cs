@@ -63,7 +63,7 @@ namespace KghmProject_DavideQuartucci.ML
             double bestValidationError = double.MaxValue;
             double bestL2Penalty = _l2PenaltyCandidates[0];
 
-            Console.WriteLine("\nPhase 3: Model Selection & Training");
+            Console.WriteLine("\n\n=== Model Selection / Hyperparameter Tuning (5.2) ===\n");
             Console.WriteLine($"{"L2 penalty",12} | {"CV error",10}");
 
             foreach (double l2Penalty in _l2PenaltyCandidates)
