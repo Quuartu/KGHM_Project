@@ -1,7 +1,5 @@
 using System;
-using System.Linq;
-using Accord.MachineLearning;
-using Accord.MachineLearning.Performance;
+using System.Collections.Generic;
 using Accord.Statistics.Models.Regression;
 using Accord.Statistics.Models.Regression.Fitting;
 
@@ -50,8 +48,9 @@ namespace KghmProject_DavideQuartucci.ML
         }
 
         /// <summary>
-        /// Grid search over the L2 penalty candidates using k-fold cross-validation on the
-        /// training set, selecting the value with the lowest average validation error.
+        /// Grid search over the L2 penalty candidates using stratified k-fold cross-validation
+        /// on the training set, selecting the value with the lowest average validation error.
+        /// Folds are stratified: each fold receives the same class ratio as the full training set.
         /// </summary>
         /// <returns>The selected L2 penalty.</returns>
         /// <exception cref="InvalidOperationException">Thrown when called before <see cref="BaseClassifier.SplitDataset"/>.</exception>
@@ -60,31 +59,50 @@ namespace KghmProject_DavideQuartucci.ML
             if (_trainFeatures.Length == 0)
                 throw new InvalidOperationException("SplitDataset must be called before tuning the hyperparameter.");
 
+            int[] foldOf = BuildStratifiedFoldIndices(_trainTargets, _crossValidationFolds);
+
             double bestValidationError = double.MaxValue;
             double bestL2Penalty = _l2PenaltyCandidates[0];
 
             Console.WriteLine("\n\n=== Model Selection / Hyperparameter Tuning (5.2) ===\n");
+            Console.WriteLine($"Stratified {_crossValidationFolds}-fold CV on training set.");
             Console.WriteLine($"{"L2 penalty",12} | {"CV error",10}");
 
             foreach (double l2Penalty in _l2PenaltyCandidates)
             {
-                CrossValidation<LogisticRegression, IterativeReweightedLeastSquares<LogisticRegression>, double[], int> crossValidation =
-                    CrossValidation.Create(
-                        k: _crossValidationFolds,
-                        learner: (_) => new IterativeReweightedLeastSquares<LogisticRegression>
-                        {
-                            MaxIterations = IrlsMaxIterations,
-                            Regularization = l2Penalty
-                        },
-                        fit: (teacher, x, y, weights) => teacher.Learn(x, y, weights),
-                        loss: (expected, actual, _) => ComputeMisclassificationRate(expected, actual),
-                        x: _trainFeatures,
-                        y: _trainTargets);
+                double totalError = 0;
 
-                CrossValidationResult<LogisticRegression, double[], int> result =
-                    crossValidation.Learn(_trainFeatures, _trainTargets, _trainSampleWeights);
-                double validationError = result.Validation.Mean;
+                for (int fold = 0; fold < _crossValidationFolds; fold++)
+                {
+                    List<int> trainIdx = new List<int>(), valIdx = new List<int>();
+                    for (int i = 0; i < _trainTargets.Length; i++)
+                    {
+                        if (foldOf[i] == fold) valIdx.Add(i);
+                        else trainIdx.Add(i);
+                    }
 
+                    double[][] foldX = new double[trainIdx.Count][];
+                    int[] foldY = new int[trainIdx.Count];
+                    for (int i = 0; i < trainIdx.Count; i++) { foldX[i] = _trainFeatures[trainIdx[i]]; foldY[i] = _trainTargets[trainIdx[i]]; }
+
+                    double[][] valX = new double[valIdx.Count][];
+                    int[] valY = new int[valIdx.Count];
+                    for (int i = 0; i < valIdx.Count; i++) { valX[i] = _trainFeatures[valIdx[i]]; valY[i] = _trainTargets[valIdx[i]]; }
+
+                    LogisticRegression model = new IterativeReweightedLeastSquares<LogisticRegression>
+                    {
+                        MaxIterations = IrlsMaxIterations,
+                        Regularization = l2Penalty
+                    }.Learn(foldX, foldY, ComputeSampleWeights(foldY));
+
+                    bool[] decisions = model.Decide(valX);
+                    int[] predicted = new int[decisions.Length];
+                    for (int i = 0; i < decisions.Length; i++) predicted[i] = decisions[i] ? 1 : 0;
+
+                    totalError += ComputeMisclassificationRate(valY, predicted);
+                }
+
+                double validationError = totalError / _crossValidationFolds;
                 Console.WriteLine($"{l2Penalty,12:G4} | {validationError,10:P2}");
 
                 if (validationError < bestValidationError)
@@ -98,6 +116,19 @@ namespace KghmProject_DavideQuartucci.ML
             Console.WriteLine($"Selected L2 penalty: {bestL2Penalty:G4} (CV error {bestValidationError:P2})");
 
             return bestL2Penalty;
+        }
+
+        /// <summary>
+        /// Assigns a fold index to each sample using round-robin within each class,
+        /// so every fold has the same class ratio as the full set.
+        /// </summary>
+        private static int[] BuildStratifiedFoldIndices(int[] targets, int k)
+        {
+            int[] foldOf = new int[targets.Length];
+            int c0 = 0, c1 = 0;
+            for (int i = 0; i < targets.Length; i++)
+                foldOf[i] = targets[i] == 0 ? c0++ % k : c1++ % k;
+            return foldOf;
         }
 
         /// <summary>Trains the final logistic regression model on the whole training set.</summary>
@@ -122,7 +153,11 @@ namespace KghmProject_DavideQuartucci.ML
             if (_model == null)
                 throw new InvalidOperationException("TrainFinalModel must be called before prediction.");
 
-            return _model.Decide(features).Select(isRisk => isRisk ? 1 : 0).ToArray();
+            bool[] decisions = _model.Decide(features);
+            int[] labels = new int[decisions.Length];
+            for (int i = 0; i < decisions.Length; i++)
+                labels[i] = decisions[i] ? 1 : 0;
+            return labels;
         }
 
         /// <summary>Misclassification rate between expected and predicted labels.</summary>

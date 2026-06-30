@@ -114,7 +114,7 @@ namespace KghmProject_DavideQuartucci
             Console.WriteLine($"Class 1 (downside risk): {numPositives} ({(double)numPositives / total * 100:F2}%)");
             Console.WriteLine($"Class 0 (stable)       : {total - numPositives} ({(double)(total - numPositives) / total * 100:F2}%)");
 
-            Console.WriteLine("\nLast 5 rows of the standardized dataset:");
+            Console.WriteLine("\nLast 5 rows of the raw dataset (standardization applied post-split):");
             Console.Write("Idx  | Target |");
             foreach (string name in featureNames)
             {

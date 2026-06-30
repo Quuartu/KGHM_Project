@@ -1,6 +1,6 @@
 using System;
-using System.Linq;
 using Accord.Statistics.Analysis;
+using KghmProject_DavideQuartucci.Processing;
 
 namespace KghmProject_DavideQuartucci.ML
 {
@@ -23,7 +23,7 @@ namespace KghmProject_DavideQuartucci.ML
         /// <summary>Per-sample weight for each row in <see cref="_trainTargets"/>, used to mitigate class imbalance.</summary>
         protected double[] _trainSampleWeights = Array.Empty<double>();
 
-        /// <param name="features">Standardized feature matrix, one row per observation.</param>
+        /// <param name="features">Raw (unstandardized) feature matrix, one row per observation.</param>
         /// <param name="targets">Binary target vector (0 = stable, 1 = downside risk).</param>
         /// <param name="testFraction">Fraction of observations reserved for the test set.</param>
         /// <exception cref="ArgumentException">Thrown when the inputs are invalid.</exception>
@@ -43,34 +43,70 @@ namespace KghmProject_DavideQuartucci.ML
 
         /// <summary>
         /// Splits the dataset into train and test sets preserving chronological order (no
-        /// shuffling), then computes per-sample class weights on the training set.
+        /// shuffling), standardizes features by fitting only on the training split to prevent
+        /// data leakage, then computes per-sample class weights on the training set.
         /// </summary>
         public void SplitDataset()
         {
             int testCount = (int)Math.Round(_features.Length * _testFraction);
             int trainCount = _features.Length - testCount;
 
-            _trainFeatures = _features.Take(trainCount).ToArray();
-            _trainTargets = _targets.Take(trainCount).ToArray();
-            _testFeatures = _features.Skip(trainCount).ToArray();
-            _testTargets = _targets.Skip(trainCount).ToArray();
+            double[][] rawTrain = new double[trainCount][];
+            _trainTargets = new int[trainCount];
+            for (int i = 0; i < trainCount; i++)
+            {
+                rawTrain[i] = _features[i];
+                _trainTargets[i] = _targets[i];
+            }
 
-            // ponytail: assumes both classes appear in the training set; numPositives == 0
-            // would surface as a 0.00% or 100.00% line below instead of failing silently.
-            int numPositives = _trainTargets.Count(t => t == 1);
-            int numNegatives = _trainTargets.Length - numPositives;
-            double weightPositive = _trainTargets.Length / (2.0 * numPositives);
-            double weightNegative = _trainTargets.Length / (2.0 * numNegatives);
-            _trainSampleWeights = _trainTargets.Select(t => t == 1 ? weightPositive : weightNegative).ToArray();
+            double[][] rawTest = new double[testCount][];
+            _testTargets = new int[testCount];
+            for (int i = 0; i < testCount; i++)
+            {
+                rawTest[i] = _features[trainCount + i];
+                _testTargets[i] = _targets[trainCount + i];
+            }
 
-            double trainPositiveRate = (double)numPositives / _trainTargets.Length;
-            double testPositiveRate = (double)_testTargets.Count(t => t == 1) / _testTargets.Length;
+            Standardizer standardizer = new Standardizer();
+            standardizer.Fit(rawTrain);
+            _trainFeatures = standardizer.Transform(rawTrain);
+            _testFeatures = standardizer.Transform(rawTest);
+
+            _trainSampleWeights = ComputeSampleWeights(_trainTargets);
+
+            int numPositives = 0;
+            for (int i = 0; i < _trainTargets.Length; i++)
+                if (_trainTargets[i] == 1) numPositives++;
+            int testPositives = 0;
+            for (int i = 0; i < _testTargets.Length; i++)
+                if (_testTargets[i] == 1) testPositives++;
 
             Console.WriteLine("\n\n=== Train/Test Split & Class Balance (5.1) ===\n");
             Console.WriteLine($"Chronological split applied ({(1 - _testFraction) * 100:F0}% train, {_testFraction * 100:F0}% test).");
-            Console.WriteLine($"Train set class 1 frequency: {trainPositiveRate:P2}");
-            Console.WriteLine($"Test set class 1 frequency: {testPositiveRate:P2}");
+            Console.WriteLine($"Standardizer fitted on training set only (leakage-free).");
+            Console.WriteLine($"Train set class 1 frequency: {(double)numPositives / _trainTargets.Length:P2}");
+            Console.WriteLine($"Test set class 1 frequency: {(double)testPositives / _testTargets.Length:P2}");
+            double weightPositive = _trainSampleWeights[Array.FindIndex(_trainTargets, t => t == 1)];
+            double weightNegative = _trainSampleWeights[Array.FindIndex(_trainTargets, t => t == 0)];
             Console.WriteLine($"Class weights (computed from train set) -> stable: {weightNegative:F3}, risk: {weightPositive:F3}");
+        }
+
+        /// <summary>
+        /// Computes inverse-frequency per-sample weights so both classes contribute equally
+        /// to the loss. Both classes must appear in <paramref name="targets"/>.
+        /// </summary>
+        protected static double[] ComputeSampleWeights(int[] targets)
+        {
+            int numPositives = 0;
+            for (int i = 0; i < targets.Length; i++)
+                if (targets[i] == 1) numPositives++;
+            int numNegatives = targets.Length - numPositives;
+            double wPos = targets.Length / (2.0 * numPositives);
+            double wNeg = targets.Length / (2.0 * numNegatives);
+            double[] weights = new double[targets.Length];
+            for (int i = 0; i < targets.Length; i++)
+                weights[i] = targets[i] == 1 ? wPos : wNeg;
+            return weights;
         }
 
         /// <summary>Trains the final model on the entire training set.</summary>

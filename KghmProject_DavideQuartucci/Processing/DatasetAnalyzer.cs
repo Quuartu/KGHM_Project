@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using KghmProject_DavideQuartucci.Models;
 
 namespace KghmProject_DavideQuartucci.Processing
@@ -26,12 +25,28 @@ namespace KghmProject_DavideQuartucci.Processing
 
             Console.WriteLine("\nDescriptive statistics of the raw features:");
             Console.WriteLine($"{"Feature",-14} | {"Mean",10} | {"Std.Dev.",10} | {"Min",10} | {"Max",10}");
-            foreach (var (name, select) in rawColumns)
+            foreach ((string name, Func<KghmRecord, double> select) in rawColumns)
             {
-                double[] values = records.Select(select).ToArray();
-                double mean = values.Average();
-                double std = Math.Sqrt(values.Sum(v => (v - mean) * (v - mean)) / values.Length);
-                Console.WriteLine($"{name,-14} | {mean,10:F2} | {std,10:F2} | {values.Min(),10:F2} | {values.Max(),10:F2}");
+                double[] values = new double[records.Count];
+                for (int i = 0; i < records.Count; i++)
+                    values[i] = select(records[i]);
+
+                double sum = 0.0;
+                for (int i = 0; i < values.Length; i++)
+                    sum += values[i];
+                double mean = sum / values.Length;
+
+                double variance = 0.0;
+                double min = values[0];
+                double max = values[0];
+                for (int i = 0; i < values.Length; i++)
+                {
+                    variance += (values[i] - mean) * (values[i] - mean);
+                    if (values[i] < min) min = values[i];
+                    if (values[i] > max) max = values[i];
+                }
+                double std = Math.Sqrt(variance / values.Length);
+                Console.WriteLine($"{name,-14} | {mean,10:F2} | {std,10:F2} | {min,10:F2} | {max,10:F2}");
             }
         }
     }

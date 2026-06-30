@@ -60,13 +60,13 @@ namespace KghmProject_DavideQuartucci.Processing
         }
 
         /// <summary>
-        /// Builds the feature matrix X and the target vector y ready for Accord.NET, using the
-        /// feature selectors supplied to the constructor. Invalid records (incomplete warm-up
-        /// window, last day with no target) are excluded before the calculation, so they do not
-        /// skew the mean and standard deviation.
+        /// Builds the raw feature matrix X and the target vector y ready for further processing.
+        /// Invalid records (incomplete warm-up window, last day with no target) are excluded.
+        /// Standardization is intentionally omitted here: the caller must fit a
+        /// <see cref="Standardizer"/> on the training split only, to prevent data leakage.
         /// </summary>
         /// <param name="records">Records already processed by Process (features and target already computed).</param>
-        /// <param name="features">Output: standardized feature matrix, one row per valid record.</param>
+        /// <param name="features">Output: raw feature matrix, one row per valid record.</param>
         /// <param name="targets">Output: target class vector, one entry per valid record.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="records"/> is null.</exception>
         public void BuildDataset(
@@ -85,80 +85,18 @@ namespace KghmProject_DavideQuartucci.Processing
             int rowCount = validRecords.Count;
             int columnCount = _featureSelectors.Count;
 
-            double[][] rawFeatures = new double[rowCount][];
+            features = new double[rowCount][];
             targets = new int[rowCount];
 
             for (int i = 0; i < rowCount; i++)
             {
-                rawFeatures[i] = new double[columnCount];
+                features[i] = new double[columnCount];
                 for (int j = 0; j < columnCount; j++)
                 {
-                    rawFeatures[i][j] = _featureSelectors[j](validRecords[i]);
+                    features[i][j] = _featureSelectors[j](validRecords[i]);
                 }
                 targets[i] = validRecords[i].TargetClass;
             }
-
-            features = StandardizeColumns(rawFeatures);
-        }
-
-        /// <summary>
-        /// Z-score standardization: for each column, subtracts the mean and divides by the sample
-        /// standard deviation, so that every feature ends up with mean 0 and standard deviation 1.
-        /// Declared static because it is a pure transformation that does not depend on the
-        /// preprocessor's configuration (extractors, labeler, feature selectors).
-        /// </summary>
-        /// <param name="rawFeatures">Feature matrix before standardization.</param>
-        /// <returns>A new matrix with the same shape as <paramref name="rawFeatures"/>, standardized column by column.</returns>
-        private static double[][] StandardizeColumns(double[][] rawFeatures)
-        {
-            int rowCount = rawFeatures.Length;
-            if (rowCount == 0) return rawFeatures;
-
-            int columnCount = rawFeatures[0].Length;
-            double[] means = new double[columnCount];
-            double[] standardDeviations = new double[columnCount];
-
-            for (int col = 0; col < columnCount; col++)
-            {
-                double sum = 0;
-                for (int row = 0; row < rowCount; row++)
-                {
-                    sum += rawFeatures[row][col];
-                }
-                means[col] = sum / rowCount;
-            }
-
-            for (int col = 0; col < columnCount; col++)
-            {
-                double sumSquaredDeviations = 0;
-                for (int row = 0; row < rowCount; row++)
-                {
-                    double deviation = rawFeatures[row][col] - means[col];
-                    sumSquaredDeviations += deviation * deviation;
-                }
-                standardDeviations[col] = Math.Sqrt(sumSquaredDeviations / rowCount);
-            }
-
-            double[][] standardized = new double[rowCount][];
-            for (int row = 0; row < rowCount; row++)
-            {
-                standardized[row] = new double[columnCount];
-                for (int col = 0; col < columnCount; col++)
-                {
-                    // Constant column (zero standard deviation): avoid division by zero by
-                    // leaving the feature centered at 0 instead of producing NaN/Infinity.
-                    if (standardDeviations[col] > 0)
-                    {
-                        standardized[row][col] = (rawFeatures[row][col] - means[col]) / standardDeviations[col];
-                    }
-                    else
-                    {
-                        standardized[row][col] = 0.0;
-                    }
-                }
-            }
-
-            return standardized;
         }
     }
 }
