@@ -132,6 +132,7 @@ namespace KghmProject_DavideQuartucci.ML
             Console.WriteLine($"Precision: {confusionMatrix.Precision:P2}");
             Console.WriteLine($"Recall   : {confusionMatrix.Recall:P2}");
             Console.WriteLine($"F1-Score : {confusionMatrix.FScore:F4}");
+            Console.WriteLine($"MCC      : {confusionMatrix.MatthewsCorrelationCoefficient:F4}");
 
             Console.WriteLine("\nConfusion matrix:");
             Console.WriteLine($"{"",14} | {"Predicted 0",12} | {"Predicted 1",12}");
